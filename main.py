@@ -22,11 +22,8 @@ async def handle_youtube_whisper(message):
     # Run the model
     response = banana.run(api_key, model_key_medium, model_inputs)
 
-    # Convert the JSON response to a Python dictionary
-    result_dict = json.loads(response.text)
-
     # Convert the dictionary to a JSON-formatted string
-    result_json = json.dumps(result_dict)
+    result_json = json.dumps(response)
 
     return result_json
 
