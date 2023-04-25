@@ -11,7 +11,7 @@ async def handle_websocket(websocket, path):
 
 
 async def main():
-    async with websockets.serve(handle_websocket, "localhost", 8080):
+    async with websockets.serve(handle_websocket, "localhost", 80):
         print("WebSocket server started")
         await asyncio.Future()  # Keep the event loop running
 
