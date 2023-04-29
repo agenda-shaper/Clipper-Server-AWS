@@ -13,7 +13,7 @@ async def handle_youtube_whisper(message):
         "end_time": message["end_time"],
         "kwargs": {"beam_size": 5, "temperature": [0, 0.2, 0.4, 0.6, 0.8, 1]},
     }
-    print(model_inputs)
+    # print(model_inputs)
 
     api_key = "c9a5be2f-b57b-4419-8599-d89f4b24bfa3"
 
