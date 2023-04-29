@@ -1,5 +1,7 @@
 import banana_dev as banana
 import asyncio
+import os
+import random
 import re
 import websockets
 import json
@@ -9,14 +11,149 @@ from whisperx.utils import write_srt
 from whisperx.utils import write_ass
 
 
-async def generateSubFiles():
+async def ConvertSubtitleTheme(subtitle_file, new_subtitle_file, comment=None):
+    with open(subtitle_file, "r", encoding="utf-8") as f:
+        lines = f.readlines()
 
-async def generateClips(subtitle_srt_file, clip_length, clipping_start):
+    with open(new_subtitle_file, "w", encoding="utf-8") as f:
+        for line in lines:
+            if line.startswith("Dialogue:"):
+                if comment is not None:
+                    f.write(
+                        "Dialogue: 0,0:00:0.00,00:00:8.00,Default,,0,0,0,,{\\fad(0,150)\\pos(960,850)}"
+                        + comment
+                        + "\n"
+                    )
+                break
+            f.write(line)
 
-    subtitle_srt_file, clip_length, clipping_start = data["subtitles_raw"]
+        last_line = None
+        last_text = None
+        last_time_end = datetime.timedelta(seconds=0)
+        last_time_start = datetime.timedelta(seconds=0)
+        last_raw_line = None
+        for line in lines:
+            if line.startswith("Dialogue:"):
+                match = re.search("}(.*?){", line)
+                if not match:
+                    continue
+
+                text = match.group(1)
+                if last_line is not None:
+                    time_fields = line.strip().split(",")
+                    epoch_time = datetime.datetime.strptime("0", "%f")
+                    hours, minutes, seconds = map(float, time_fields[1].split(":"))
+                    start_time_ms = datetime.timedelta(
+                        hours=hours, minutes=minutes, seconds=seconds
+                    )
+                    hours, minutes, seconds = map(float, time_fields[2].split(":"))
+                    end_time_ms = datetime.timedelta(
+                        hours=hours, minutes=minutes, seconds=seconds
+                    )
+                    end_time = (epoch_time + end_time_ms).strftime("%H:%M:%S.%f")[:-4]
+
+                    temp_text = last_text + " " + text
+
+                    if (
+                        len(temp_text) <= 12
+                        and "." not in last_text
+                        and text in last_raw_line
+                        and "!" not in last_text
+                        and "?" not in last_text
+                        and not last_text.rstrip().endswith(",")
+                    ):
+                        last_text_fields = last_line.strip().split(",,")
+                        last_time_fields = last_line.strip().split(",")
+                        last_temp_fields = last_text_fields[0].strip().split(",")
+
+                        last_raw_line = line
+                        last_text = temp_text
+                        last_line = (
+                            last_temp_fields[0]
+                            + ","
+                            + last_temp_fields[1]
+                            + ","
+                            + end_time
+                            + ","
+                            + last_temp_fields[3]
+                            + ",,"
+                            + last_text_fields[1]
+                            + ",,"
+                            + last_text
+                            + "\n"
+                        )
+                        continue
+
+                    timeAmount = last_time_end - last_time_start
+                    last_time_end = last_time_end + max(
+                        datetime.timedelta(seconds=0),
+                        datetime.timedelta(microseconds=1250000) - timeAmount,
+                    )
+                    last_time_end = min(last_time_end, start_time_ms)
+
+                    last_time_end_normal = (epoch_time + last_time_end).strftime(
+                        "%H:%M:%S.%f"
+                    )[:-4]
+
+                    temp_fields = last_line.strip().split(",,")
+                    last_text = (
+                        last_text.replace(".", "")
+                        .replace(",", "")
+                        .replace("!", "")
+                        .upper()
+                    )
+                    timingNew_fields = temp_fields[0].strip().split(",")
+                    margin_fields = temp_fields[1].strip().split(",")
+                    last_line = (
+                        timingNew_fields[0]
+                        + ","
+                        + timingNew_fields[1]
+                        + ","
+                        + last_time_end_normal
+                        + ","
+                        + timingNew_fields[3]
+                        + ",,"
+                        + margin_fields[0]
+                        + ","
+                        + margin_fields[1]
+                        + ","
+                        + margin_fields[2]
+                        + ",,"
+                        + "{\\fad(20,20)\pos(960,500)}"
+                        + last_text
+                        + "\n"
+                    )
+
+                    last_time_end = end_time_ms
+                    last_time_start = start_time_ms
+                    f.write(last_line)
+
+                last_line = line
+                last_text = text
+                last_raw_line = line
+
+
+async def generateClips(ws, result, clip_length, clipping_start, clipping_end):
+    id = str(random.randint(1, 10000))
+
+    with open(f"subtitles{id}.ass", "w", encoding="utf-8") as file:
+        write_ass(
+            result["segments"],
+            file=file,
+            resolution="word",
+            font="Mercadillo Bold",
+            font_size=80,
+            underline=False,
+            xRes="1920",
+            yRes="1080",
+            **{"Bold": "1", "Alignment": "5", "Outline": "6", "Shadow": "6"},
+        )
+
+    with open(f"subtitles{id}.srt", "w", encoding="utf-8") as file:
+        write_srt(result["segments"], file=file)
 
     # Open the SRT file and read its contents
-    with open(subtitle_srt_file, "r") as f:
+    with open(f"subtitles{id}.srt", "r") as f:
         lines = f.readlines()
 
     # Initialize variables
@@ -88,10 +225,15 @@ async def generateClips(subtitle_srt_file, clip_length, clipping_start):
             # If so, extract the start time of the previous line and subtract one second from it
             start_time = datetime.datetime.strptime(line[:12], "%H:%M:%S,%f")
             clipping_start_datetime = datetime.datetime.strptime(
-                str(clipping_start), "%H"
+                str(clipping_start), "%H:%M:%S,%f"
+            )
+            clipping_end_datetime = datetime.datetime.strptime(
+                str(clipping_end), "%H:%M:%S,%f"
             )
             if clipping_start_datetime > start_time:
                 continue
+            if clipping_end_datetime <= start_time:
+                break
             clip_start_time = start_time
             print(lines[index + 1])
             clip_start_times.append((clip_start_time - epoch_time).total_seconds())
@@ -123,13 +265,20 @@ async def handle_websocket(websocket, path):
         print(f"Received message: {message}")
         try:
             data = json.loads(message)
-            type = data["case"]
-            if type == "banana_dev":
+            type = data["type"]
+            if type == "export_video":
                 result_json = await handle_banana_dev(data)
                 await websocket.send(result_json)
             elif type == "gen_clips":
-                result_json = await generateClips(data)
-                await websocket.send(result_json)
+                clip_length = data["clip_length"]
+                start_time = data["start_time"]
+                end_time = data["end_time"]
+                segments_stuff = await handle_banana_dev(data)
+                await websocket.send("transcribed audio")
+                output = await generateClips(
+                    websocket, segments_stuff, clip_length, start_time, end_time
+                )
+                await websocket.send(output)
         except json.JSONDecodeError:
             print("Invalid JSON received")
             await websocket.send("Invalid JSON format")
