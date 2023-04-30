@@ -5,10 +5,12 @@ import random
 import re
 import websockets
 import json
-import whisperx
+
+# import whisperx
 import datetime
-from whisperx.utils import write_srt
-from whisperx.utils import write_ass
+
+# from whisperx.utils import write_srt
+# from whisperx.utils import write_ass
 
 
 async def ConvertSubtitleTheme(subtitle_file, new_subtitle_file, comment=None):
@@ -266,7 +268,7 @@ async def handle_websocket(websocket, path):
         try:
             data = json.loads(message)
             type = data["type"]
-            if type == "export_video":
+            if type == "export_video" or type == "transcribe_audio":
                 result_json = await handle_banana_dev(data)
                 await websocket.send(result_json)
             elif type == "gen_clips":
