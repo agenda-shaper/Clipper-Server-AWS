@@ -276,11 +276,11 @@ async def handle_websocket(websocket, path):
                 start_time = data["start_time"]
                 end_time = data["end_time"]
                 segments_stuff = await handle_banana_dev(data)
-                await websocket.send("transcribed audio")
-                output = await generateClips(
-                    websocket, segments_stuff, clip_length, start_time, end_time
-                )
-                await websocket.send(output)
+                await websocket.send(segments_stuff)  # "transcribed audio")
+                # output = await generateClips(
+                #    websocket, segments_stuff, clip_length, start_time, end_time
+                # )
+                # await websocket.send(output)
         except json.JSONDecodeError:
             print("Invalid JSON received")
             await websocket.send("Invalid JSON format")
